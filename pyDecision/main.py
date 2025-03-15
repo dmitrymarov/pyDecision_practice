@@ -1,10 +1,40 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
 import json
 import os
 from algorithm.e_iii import electre_iii
 
 SSI = [0, 0, 0.58, 0.9, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
+
+def electre_iii_fixed(dataset, P, Q, V, W, graph=False):
+    alts   = list(range(1, dataset.shape[0] + 1)) 
+    alts   = ['a' + str(alt) for alt in alts]
+    alts_D = [0]*dataset.shape[0]
+    alts_A = [0]*dataset.shape[0]
+    # Call the original function's utility functions but save the graph instead of showing it
+    from algorithm.e_iii import global_concordance_matrix, credibility_matrix, destilation_descending, destilation_ascending, pre_order_matrix
+    
+    global_concordance = global_concordance_matrix(dataset, P=P, Q=Q, W=W)
+    credibility = credibility_matrix(dataset, global_concordance, P=P, V=V)
+    rank_D = destilation_descending(credibility=credibility)
+    rank_A = destilation_ascending(credibility=credibility)
+    rank_M = []
+    for i in range(0, dataset.shape[0]):
+        for j in range(0, len(rank_D)):
+            if (alts[i] in rank_D[j]):
+                alts_D[i] = j + 1
+        for k in range(0, len(rank_A)):
+            if (alts[i] in rank_A[k]):
+                alts_A[i] = k + 1 
+    for i in range(0, len(alts)):
+        rank_M.append('a' + str(i+1))
+    rank_M.sort()
+    rank_P = pre_order_matrix(rank_D, rank_A, number_of_alternatives=dataset.shape[0])
+    if (graph == True):
+        po_ranking_fixed(rank_P)
+    return global_concordance, credibility, rank_D, rank_A, rank_M, rank_P
 
 def matrix(number):
     A = np.ones([number, number])
@@ -137,6 +167,11 @@ def visualize_sensitivity(sensitivity_results, numberAlt):
                     alternative_ranks[alt].append(rank_idx + 1)
                     rank_found = True
                     break
+                # Handle semicolon separated alternatives
+                elif isinstance(rank_group, str) and alt in rank_group.split(';'):
+                    alternative_ranks[alt].append(rank_idx + 1)
+                    rank_found = True
+                    break
             if not rank_found:
                 alternative_ranks[alt].append(0)  # Если не найдено, присваиваем 0
     
@@ -154,9 +189,92 @@ def visualize_sensitivity(sensitivity_results, numberAlt):
     ax.legend()
     
     plt.tight_layout()
-    plt.show()
+    # Save figure instead of showing it
+    plt.savefig('sensitivity_analysis.png')
+    plt.close()
     
     return alternative_ranks
+
+def po_ranking_fixed(po_string):
+    alts = list(range(1, po_string.shape[0] + 1)) 
+    alts = ['a' + str(alt) for alt in alts]
+    for i in range (po_string.shape[0] - 1, -1, -1):
+        for j in range (po_string.shape[1] -1, -1, -1):
+            if (po_string[i,j] == 'I'):
+                po_string = np.delete(po_string, i, axis = 0)
+                po_string = np.delete(po_string, i, axis = 1)
+                alts[j] = str(alts[j] + "; " + alts[i])
+                del alts[i]
+                break    
+    graph = {}
+    for i in range(po_string.shape[0]):
+        if (len(alts[i]) == 0):
+            graph[alts[i]] = i 
+        else:
+            graph[alts[i][ :2]] = i   
+            graph[alts[i][-2:]] = i 
+    po_matrix = np.zeros((po_string.shape[0], po_string.shape[1]))
+    for i in range (0, po_string.shape[0]):
+        for j in range (0, po_string.shape[1]):
+            if (po_string[i,j] == 'P+'):
+                po_matrix[i,j] = 1
+    col_sum = np.sum(po_matrix, axis = 1)
+    alts_rank = [x for _, x in sorted(zip(col_sum, alts))]
+    if (np.sum(col_sum) != 0):
+        alts_rank.reverse()      
+    graph_rank = {}
+    for i in range(po_string.shape[0]):
+        if (len(alts_rank[i]) == 0):
+            graph_rank[alts_rank[i]] = i 
+        else:
+            graph_rank[alts_rank[i][ :2]] = i   
+            graph_rank[alts_rank[i][-2:]] = i
+    rank = np.copy(po_matrix)
+    for i in range(0, po_matrix.shape[0]):
+        for j in range(0, po_matrix.shape[1]): 
+            if (po_matrix[i,j] == 1):
+                rank[i,:] = np.clip(rank[i,:] - rank[j,:], 0, 1)   
+    rank_xy = np.zeros((len(alts_rank), 2))
+    for i in range(0, rank_xy.shape[0]):
+        rank_xy[i, 0] = 0
+        if (len(alts_rank) - np.sum(~rank.any(1)) != 0):
+            rank_xy[i, 1] = len(alts_rank) - np.sum(~rank.any(1))
+        else:
+            rank_xy[i, 1] = 1
+    for i in range(0, len(alts_rank) - 1):
+        i1 = int(graph[alts_rank[ i ][:2]]) 
+        i2 = int(graph[alts_rank[i+1][:2]])
+        if (po_string[i1,i2] == 'P+'):
+            rank_xy[i+1,1] = rank_xy[i+1,1] - 1
+            for j in range(i+2, rank_xy.shape[0]):
+                rank_xy[j,1] = rank_xy[i+1,1]
+        if (po_string[i1,i2] == 'R'):
+            rank_xy[i+1,0] = rank_xy[i,0] + 1            
+    for i in range(0, rank_xy.shape[0]):
+        plt.text(rank_xy[i, 0],  rank_xy[i, 1], alts_rank[i], size = 12, ha = 'center', va = 'center', bbox = dict(boxstyle = 'round', ec = (0.0, 0.0, 0.0), fc = (0.8, 1.0, 0.8),))
+    for i in range(0, len(alts_rank)):
+        alts_rank[i] = alts_rank[i][:2]
+    for i in range(0, rank.shape[0]):
+        for j in range(0, rank.shape[1]):
+            k1 = int(graph_rank[list(graph.keys())[list(graph.values()).index(i)]])
+            k2 = int(graph_rank[list(graph.keys())[list(graph.values()).index(j)]])
+            if (rank[i, j] == 1):  
+                plt.arrow(rank_xy[k1, 0], rank_xy[k1, 1], rank_xy[k2, 0] - rank_xy[k1, 0], rank_xy[k2, 1] - rank_xy[k1, 1], head_width = 0.01, head_length = 0.2, overhang = 0.0, color = 'black', linewidth = 0.9, length_includes_head = True)
+    axes = plt.gca()
+    xmin = np.amin(rank_xy[:,0])
+    xmax = np.amax(rank_xy[:,0])
+    axes.set_xlim([xmin-1, xmax+1])
+    ymin = np.amin(rank_xy[:,1])
+    ymax = np.amax(rank_xy[:,1])
+    if (ymin < ymax):
+        axes.set_ylim([ymin, ymax])
+    else:
+        axes.set_ylim([ymin-1, ymax+1])
+    plt.axis('off')
+    # Save figure instead of showing it
+    plt.savefig('po_ranking.png')
+    plt.close()
+    return
 
 def save_data(data, filename):
     """Сохраняет данные в JSON-файл"""
@@ -168,6 +286,14 @@ def save_data(data, filename):
                 json_data[key] = value.tolist()
             elif isinstance(value, list) and value and isinstance(value[0], np.ndarray):
                 json_data[key] = [item.tolist() for item in value]
+            elif key == 'electre_results':
+                # Handle nested dictionaries with numpy arrays
+                json_data[key] = {}
+                for subkey, subvalue in value.items():
+                    if isinstance(subvalue, np.ndarray):
+                        json_data[key][subkey] = subvalue.tolist()
+                    else:
+                        json_data[key][subkey] = subvalue
             else:
                 json_data[key] = value
         
@@ -178,6 +304,7 @@ def save_data(data, filename):
     except Exception as e:
         print(f"Ошибка при сохранении данных: {e}")
         return False
+
 
 def load_data(filename):
     """Загружает данные из JSON-файла"""
@@ -227,17 +354,29 @@ def display_results(data, sensitivity_analysis_results=None):
         print("\nРезультаты анализа чувствительности:")
         
         # Определение стабильных альтернатив
-        first_rank_set = set()
-        for alt in data['electre_results']['rank_D'][0]:
-            first_rank_set.add(alt)
+        first_rank = data['electre_results']['rank_D'][0] if data['electre_results']['rank_D'] else ""
+        
+        # Parse alternatives from potentially semi-colon separated string
+        alternatives = []
+        if isinstance(first_rank, str):
+            alternatives = [alt.strip() for alt in first_rank.split(';')]
         
         stable_alts = []
         unstable_alts = []
         
-        for alt in first_rank_set:
+        for alt in alternatives:
+            if not alt:  # Skip empty alternatives
+                continue
+                
             stable = True
             for scenario, ranks in sensitivity_analysis_results[1:]:
-                if alt not in ranks[0]:
+                first_rank_scenario = ranks[0] if ranks else ""
+                scenario_alts = []
+                
+                if isinstance(first_rank_scenario, str):
+                    scenario_alts = [a.strip() for a in first_rank_scenario.split(';')]
+                
+                if alt not in scenario_alts:
                     stable = False
                     break
             
@@ -251,6 +390,8 @@ def display_results(data, sensitivity_analysis_results=None):
         
         print("\nНестабильные альтернативы (могут выпадать из первого ранга):")
         print(unstable_alts)
+
+
 
 def main():
     # Проверка наличия сохраненных данных
@@ -373,13 +514,13 @@ def main():
     
     # Apply ELECTRE III
     try:
-        global_concordance, credibility, rank_D, rank_A, rank_M, rank_P = electre_iii(
+        global_concordance, credibility, rank_D, rank_A, rank_M, rank_P = electre_iii_fixed(
             dataset=performance_matrix, 
             P=P, 
             Q=Q, 
             V=V, 
             W=weights,
-            graph=True  # This will show the pre-order graph
+            graph=True  # This will save the pre-order graph instead of showing it
         )
         
         electre_results = {

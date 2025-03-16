@@ -353,18 +353,45 @@ class AHPAnalyzer:
             raise ValueError("Необходимо сначала выполнить анализ альтернатив")
         
         if thresholds is None:
-            # Автоматическое определение порогов
-            # Используем диапазон значений по каждому критерию
-            performance_matrix = np.array(self.alt_weights).T  # Преобразуем в матрицу альтернативы x критерии
+            # Автоматическое определение порогов на основе характеристик данных
+            # Преобразуем в матрицу альтернативы x критерии
+            performance_matrix = np.array(self.alt_weights).T  
             
-            # Вычисляем диапазоны значений
+            # Вычисляем диапазоны значений для каждого критерия
             ranges = np.max(performance_matrix, axis=0) - np.min(performance_matrix, axis=0)
             ranges = np.where(ranges == 0, 0.01, ranges)  # Защита от нулевого диапазона
             
-            # Устанавливаем пороги как процент от диапазона
-            Q = ranges * 0.05  # 5% от диапазона для порога безразличия
-            P = ranges * 0.2   # 20% от диапазона для порога предпочтения
-            V = ranges * 0.5   # 50% от диапазона для порога вето
+            # Инициализируем массивы порогов
+            Q = np.zeros(len(self.criteria_names))  # Порог безразличия
+            P = np.zeros(len(self.criteria_names))  # Порог предпочтения
+            V = np.zeros(len(self.criteria_names))  # Порог вето
+            
+            # Настройка порогов для задачи выбора диалогового модуля с графовой структурой
+            # Учитываем специфику каждого критерия в контексте разработки веб-интерфейса
+            for i, criterion in enumerate(self.criteria_names):
+                # Интегрируемость с существующими системами предприятия
+                if i == 0:  
+                    Q[i] = ranges[i] * 0.10  # 10% - малые различия имеют значение для интеграции
+                    P[i] = ranges[i] * 0.22  # 22% - заметная разница в возможностях интеграции
+                    V[i] = ranges[i] * 0.60  # 60% - вето при значительных проблемах с интеграцией
+                
+                # Гибкость и масштабируемость - критичны для графового модуля
+                elif i == 1:  
+                    Q[i] = ranges[i] * 0.08  # 8% - важны даже малые различия в гибкости
+                    P[i] = ranges[i] * 0.20  # 20% - четкие различия в гибкости и масштабируемости
+                    V[i] = ranges[i] * 0.50  # 50% - строгий порог вето для недостаточно гибких решений
+                
+                # Стоимость разработки и внедрения - критерий на минимизацию
+                elif i == 2:  
+                    Q[i] = ranges[i] * 0.12  # 12% - область безразличия для близких бюджетов
+                    P[i] = ranges[i] * 0.25  # 25% - заметная разница в стоимости
+                    V[i] = ranges[i] * 0.65  # 65% - вето только для крайне дорогих вариантов
+                
+                # Сложность поддержки и модификации - критерий на минимизацию
+                elif i == 3:  
+                    Q[i] = ranges[i] * 0.15  # 15% - допустима некоторая сложность для мощных решений
+                    P[i] = ranges[i] * 0.30  # 30% - значительные различия в сложности поддержки
+                    V[i] = ranges[i] * 0.70  # 70% - вето только для крайне сложных в поддержке систем
             
             self.electre_thresholds = {
                 'Q': Q,
@@ -379,7 +406,7 @@ class AHPAnalyzer:
             # Преобразуем веса альтернатив в матрицу решения
             performance_matrix = np.array(self.alt_weights).T
             
-            # Для критериев на минимизацию инвертируем значения в матрице
+            # Для критериев на минимизацию инвертируем значения
             for i, crit_type in enumerate(self.criteria_types):
                 if crit_type == 'min':
                     min_value = np.min(performance_matrix[:, i])
@@ -397,7 +424,7 @@ class AHPAnalyzer:
                 Q=self.electre_thresholds['Q'],
                 V=self.electre_thresholds['V'],
                 W=self.criteria_weights,
-                graph=False  # Не показываем график, так как мы в неинтерактивном режиме
+                graph=False  # Не показываем график в неинтерактивном режиме
             )
             
             # Сохраняем результаты
@@ -420,7 +447,7 @@ class AHPAnalyzer:
             for i, rank_group in enumerate(rank_A):
                 print(f"Ранг {i+1}: {rank_group}")
                 
-            # Определяем стабильно лучшие альтернативы (те, которые в первом ранге обоих дистилляций)
+            # Определяем стабильно лучшие альтернативы
             desc_rank_1 = set(rank_D[0].split('; ')) if isinstance(rank_D[0], str) else set([rank_D[0]])
             asc_rank_1 = set(rank_A[0].split('; ')) if isinstance(rank_A[0], str) else set([rank_A[0]])
             stable_best = desc_rank_1.intersection(asc_rank_1)
@@ -431,7 +458,7 @@ class AHPAnalyzer:
         except Exception as e:
             print(f"Ошибка при выполнении ELECTRE III: {e}")
             print("Убедитесь, что модуль algorithm.e_iii доступен и корректно работает.")
-
+            
     def visualize_all_matrices(self):
         """
         Визуализирует все матрицы парных сравнений и сохраняет графики
@@ -930,6 +957,17 @@ def run_ahp_electre_example():
     # Инициализируем анализатор
     ahp = AHPAnalyzer(output_dir=output_dir)
     
+    # Критерии:
+    # 1. Интегрируемость с существующими системами предприятия
+    # 2. Гибкость и масштабируемость решения
+    # 3. Стоимость разработки и внедрения 
+    # 4. Сложность поддержки и модификации 
+    
+    # Альтернативы:
+    # 1. Реализация на основе существующих компонентов MediaWiki
+    # 2. Разработка специализированного веб-приложения с графовой базой данных
+    # 3. Разработка модульного решения на основе микросервисной архитектуры
+
     # Количество критериев
     num_criteria = 4
     
@@ -940,20 +978,20 @@ def run_ahp_electre_example():
     criteria_matrix = np.ones((num_criteria, num_criteria))
     
     # Заполняем верхний треугольник матрицы критериев
-    criteria_matrix[0][1] = 3
-    criteria_matrix[0][2] = 5
-    criteria_matrix[0][3] = 1
-    criteria_matrix[1][2] = 2
-    criteria_matrix[1][3] = 0.5
-    criteria_matrix[2][3] = 0.25
+    criteria_matrix[0][1] = 1.2
+    criteria_matrix[0][2] = 0.75
+    criteria_matrix[0][3] = 1.5
+    criteria_matrix[1][2] = 0.8
+    criteria_matrix[1][3] = 1.33
+    criteria_matrix[2][3] = 0.9
     
     # Заполняем нижний треугольник (обратные значения)
     for i in range(num_criteria):
         for j in range(i):
             criteria_matrix[i][j] = 1.0 / criteria_matrix[j][i]
-    
-    # Анализ критериев (предположим, что первые два критерия на максимизацию, остальные на минимизацию)
-    criteria_names = [f'Критерий {i+1}' for i in range(num_criteria)]
+   
+    criteria_names = ['Интегрируемость', 'Гибкость', 'Стоимость', 'Сложность']
+    # criteria_names = [f'Критерий {i+1}' for i in range(num_criteria)]
     criteria_types = ['max', 'max', 'min', 'min']  # Пример типов критериев
     
     ahp.analyze_criteria(criteria_matrix, criteria_names, criteria_types, method='geometric')
@@ -963,9 +1001,9 @@ def run_ahp_electre_example():
     
     # Матрица альтернатив для первого критерия
     alt_matrix_1 = np.ones((num_alternatives, num_alternatives))
-    alt_matrix_1[0][1] = 0.5
-    alt_matrix_1[0][2] = 0.5
-    alt_matrix_1[1][2] = 0.33
+    alt_matrix_1[0][1] = 2.0
+    alt_matrix_1[0][2] = 0.8
+    alt_matrix_1[1][2] = 0.5
     
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
@@ -974,9 +1012,9 @@ def run_ahp_electre_example():
     
     # Матрица альтернатив для второго критерия
     alt_matrix_2 = np.ones((num_alternatives, num_alternatives))
-    alt_matrix_2[0][1] = 2
-    alt_matrix_2[0][2] = 3
-    alt_matrix_2[1][2] = 0.33
+    alt_matrix_2[0][1] = 0.33
+    alt_matrix_2[0][2] = 0.25
+    alt_matrix_2[1][2] = 0.8
     
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
@@ -985,9 +1023,9 @@ def run_ahp_electre_example():
     
     # Матрица альтернатив для третьего критерия
     alt_matrix_3 = np.ones((num_alternatives, num_alternatives))
-    alt_matrix_3[0][1] = 0.5
-    alt_matrix_3[0][2] = 0.33
-    alt_matrix_3[1][2] = 4
+    alt_matrix_3[0][1] = 0.33
+    alt_matrix_3[0][2] = 0.5
+    alt_matrix_3[1][2] = 0.8
 
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
@@ -996,9 +1034,9 @@ def run_ahp_electre_example():
     
     # Матрица альтернатив для четвертого критерия
     alt_matrix_4 = np.ones((num_alternatives, num_alternatives))
-    alt_matrix_4[0][1] = 0.5
-    alt_matrix_4[0][2] = 2
-    alt_matrix_4[1][2] = 0.5
+    alt_matrix_4[0][1] = 0.75
+    alt_matrix_4[0][2] = 0.67
+    alt_matrix_4[1][2] = 1.2
     
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
@@ -1009,7 +1047,8 @@ def run_ahp_electre_example():
     alt_matrices = [alt_matrix_1, alt_matrix_2, alt_matrix_3, alt_matrix_4]
     
     # Анализ альтернатив
-    alternative_names = [f'Альтернатива {i+1}' for i in range(num_alternatives)]
+    # alternative_names = [f'Альтернатива {i+1}' for i in range(num_alternatives)]
+    alternative_names = ['MediaWiki', 'Веб с графовой БД', 'Микросервисы']
     ahp.analyze_alternatives(alt_matrices, alternative_names, method='geometric')
     
     # Вычисляем итоговые приоритеты по AHP

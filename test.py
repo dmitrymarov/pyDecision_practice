@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # Неинтерактивный бэкенд для работы в средах без GUI
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -8,7 +8,7 @@ import json
 import os
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.gridspec as gridspec
-
+from pyDecision.algorithm.e_iii import electre_iii
 class AHPAnalyzer:
     """
     Класс для полного анализа по методу AHP (Analytic Hierarchy Process)
@@ -376,8 +376,6 @@ class AHPAnalyzer:
         
         # Запускаем ELECTRE III
         try:
-            from algorithm.e_iii import electre_iii
-            
             # Преобразуем веса альтернатив в матрицу решения
             performance_matrix = np.array(self.alt_weights).T
             
@@ -936,7 +934,7 @@ def run_ahp_electre_example():
     num_criteria = 4
     
     # Количество альтернатив
-    num_alternatives = 5
+    num_alternatives = 3
     
     # Ваши данные - формируем матрицу парных сравнений критериев
     criteria_matrix = np.ones((num_criteria, num_criteria))
@@ -967,14 +965,7 @@ def run_ahp_electre_example():
     alt_matrix_1 = np.ones((num_alternatives, num_alternatives))
     alt_matrix_1[0][1] = 0.5
     alt_matrix_1[0][2] = 0.5
-    alt_matrix_1[0][3] = 2
-    alt_matrix_1[0][4] = 5
     alt_matrix_1[1][2] = 0.33
-    alt_matrix_1[1][3] = 2
-    alt_matrix_1[1][4] = 0.33
-    alt_matrix_1[2][3] = 4
-    alt_matrix_1[2][4] = 2
-    alt_matrix_1[3][4] = 1/3
     
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
@@ -985,14 +976,7 @@ def run_ahp_electre_example():
     alt_matrix_2 = np.ones((num_alternatives, num_alternatives))
     alt_matrix_2[0][1] = 2
     alt_matrix_2[0][2] = 3
-    alt_matrix_2[0][3] = 0.33
-    alt_matrix_2[0][4] = 0.5
     alt_matrix_2[1][2] = 0.33
-    alt_matrix_2[1][3] = 0.25
-    alt_matrix_2[1][4] = 2
-    alt_matrix_2[2][3] = 1
-    alt_matrix_2[2][4] = 0.33
-    alt_matrix_2[3][4] = 0.5
     
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
@@ -1003,15 +987,8 @@ def run_ahp_electre_example():
     alt_matrix_3 = np.ones((num_alternatives, num_alternatives))
     alt_matrix_3[0][1] = 0.5
     alt_matrix_3[0][2] = 0.33
-    alt_matrix_3[0][3] = 3
-    alt_matrix_3[0][4] = 5
     alt_matrix_3[1][2] = 4
-    alt_matrix_3[1][3] = 4
-    alt_matrix_3[1][4] = 3
-    alt_matrix_3[2][3] = 0.5
-    alt_matrix_3[2][4] = 2
-    alt_matrix_3[3][4] = 0.5
-    
+
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
         for j in range(i):
@@ -1021,14 +998,7 @@ def run_ahp_electre_example():
     alt_matrix_4 = np.ones((num_alternatives, num_alternatives))
     alt_matrix_4[0][1] = 0.5
     alt_matrix_4[0][2] = 2
-    alt_matrix_4[0][3] = 0.33
-    alt_matrix_4[0][4] = 0.5
     alt_matrix_4[1][2] = 0.5
-    alt_matrix_4[1][3] = 0.2
-    alt_matrix_4[1][4] = 2
-    alt_matrix_4[2][3] = 2
-    alt_matrix_4[2][4] = 0.33
-    alt_matrix_4[3][4] = 0.5
     
     # Заполняем нижний треугольник
     for i in range(num_alternatives):
